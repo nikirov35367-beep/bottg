@@ -1,0 +1,19 @@
+[Unit]
+Description=Telegram lead-qualification bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Поменяйте, если положили проект в другое место / под другим пользователем
+User=root
+WorkingDirectory=/opt/tgbot
+EnvironmentFile=/opt/tgbot/.env
+ExecStart=/opt/tgbot/venv/bin/python /opt/tgbot/bot.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

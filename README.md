@@ -14,6 +14,46 @@ Telegram-бот на aiogram 3. Приветствие → 4 вопроса на
 На каждом шаге есть кнопка «Назад». Лид получает балл 3–11 и метку
 🔥 горячий / 🌤 тёплый / ❄️ холодный.
 
+## Куда попадает заявка
+
+1. **Битрикс24** — создаётся **контакт** (имя, телефон, telegram-ник) и
+   **сделка** «Бот ТГ», связанная с этим контактом. Источник — Telegram,
+   все ответы воронки уходят в комментарий сделки.
+2. **SQLite** на сервере (`data/leads.db`) — как страховка и для `/export`.
+3. **Telegram админу** — карточка лида с пометкой, создалась ли сделка.
+
+Если Битрикс недоступен, заявка всё равно сохраняется, клиент видит
+благодарность, а админу приходит предупреждение с текстом ошибки —
+такой лид не теряется.
+
+### Настройка Битрикса
+
+В `.env`:
+
+```
+BITRIX_WEBHOOK=https://ваш-портал.bitrix24.ru/rest/1/ключ/
+BITRIX_SOURCE_ID=RC_GENERATOR
+BITRIX_DEAL_TITLE=Бот ТГ
+```
+
+Посмотреть, какие источники заведены у вас в CRM (ничего не меняет):
+
+```bash
+/opt/tgbot/venv/bin/python /opt/tgbot/scripts/bitrix_check.py
+```
+
+В текущем портале источник «ТГ бот» имеет `STATUS_ID` = `RC_GENERATOR`
+(системный «Генератор продаж», переименованный) — он и стоит по умолчанию.
+Если источник поменяют, возьмите новый ID из вывода команды выше.
+Значения `OTHER` в этом портале нет — вписывать его нельзя, Битрикс
+подставит первый источник из списка.
+
+Проверить сквозняком (создаст одну тестовую сделку — потом удалите):
+
+```bash
+/opt/tgbot/venv/bin/python /opt/tgbot/scripts/bitrix_check.py --test
+```
+
 ## Установка на сервер
 
 ```bash
@@ -37,6 +77,35 @@ ssh user@server 'cd /tmp/tgbot && sudo bash deploy/install.sh'
 systemctl status tgbot
 journalctl -u tgbot -f
 ```
+
+## Автодеплой через GitHub Actions
+
+При пуше в `main` workflow `.github/workflows/deploy.yml` сначала прогоняет
+проверку (`ci/smoke.py`), затем заходит на сервер по SSH, обновляет код,
+ставит зависимости и перезапускает сервис. Если бот не поднялся — деплой
+падает с логами.
+
+Секреты репозитория (**Settings → Secrets and variables → Actions**):
+
+| Секрет | Значение |
+|---|---|
+| `SSH_HOST` | IP сервера |
+| `SSH_USER` | `root` |
+| `SSH_KEY` | приватный ключ целиком, вместе с `-----BEGIN/END-----` |
+| `BOT_TOKEN` | токен от @BotFather |
+| `ADMIN_IDS` | ваш Telegram ID |
+| `BITRIX_WEBHOOK` | URL вебхука Битрикса |
+
+Ключ для деплоя создаётся на вашей машине:
+
+```bash
+ssh-keygen -t ed25519 -C "github-deploy" -f ~/.ssh/tgbot_deploy
+ssh-copy-id -i ~/.ssh/tgbot_deploy.pub root@СЕРВЕР
+cat ~/.ssh/tgbot_deploy      # это → в секрет SSH_KEY
+```
+
+`.env` создаётся из секретов только при первом деплое; дальше workflow его
+не трогает — меняйте на сервере руками.
 
 ## Локальный запуск
 
@@ -74,9 +143,13 @@ app/config.py          чтение .env
 app/funnel.py          ← вопросы, тексты, баллы
 app/keyboards.py       кнопки
 app/db.py              SQLite (data/leads.db)
+app/bitrix.py          контакт + сделка в Битрикс24
 app/handlers/lead.py   логика воронки (FSM)
 app/handlers/admin.py  /stats, /export
 deploy/                systemd-юнит и install.sh
+ci/smoke.py            проверка перед деплоем
+scripts/bitrix_check.py  диагностика Битрикса
+.github/workflows/     автодеплой
 ```
 
 ## Заметки
