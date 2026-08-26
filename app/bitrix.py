@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from typing import Any
 
 import aiohttp
@@ -47,7 +49,7 @@ class Bitrix:
 
     async def add_contact(self, *, full_name: str, phone: str,
                           username: str | None) -> int:
-        parts = full_name.split(maxsplit=1)
+        parts = plain(full_name).split(maxsplit=1)
         fields: dict[str, Any] = {
             "NAME": parts[0] if parts else "Клиент",
             "OPENED": "Y",
@@ -86,6 +88,22 @@ class Bitrix:
         return contact_id, deal_id
 
 
+def plain(text: str) -> str:
+    """Убираем эмодзи и прочие 4-байтные символы.
+
+    База Битрикса обычно в кодировке utf8 (не utf8mb4): встретив эмодзи,
+    портал обрезает строку по этому месту — комментарий приходит пустым.
+    Поэтому в CRM отправляем текст без эмодзи, в Telegram они остаются.
+    """
+    cleaned = "".join(
+        ch for ch in text
+        if ord(ch) <= 0xFFFF and unicodedata.category(ch) != "So"
+    )
+    # схлопываем пробелы, оставшиеся на месте вырезанных символов
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    return "\n".join(line.strip() for line in cleaned.split("\n"))
+
+
 def build_comment(*, full_name: str, username: str | None, tg_id: int,
                   phone: str, answers: dict[str, str], points: int) -> str:
     """Всё, что собрал бот — в комментарий сделки."""
@@ -101,4 +119,4 @@ def build_comment(*, full_name: str, username: str | None, tg_id: int,
         f"Telegram ID: {tg_id}",
         f"Оценка: {points} б. — {temperature(points)}",
     ]
-    return "\n".join(lines)
+    return plain("\n".join(lines))
