@@ -63,27 +63,35 @@ class Bitrix:
             fields["IM"] = [{"VALUE": f"@{username}", "VALUE_TYPE": "TELEGRAM"}]
         return int(await self._call("crm.contact.add", {"fields": fields}))
 
-    async def add_deal(self, *, contact_id: int, comment: str) -> int:
+    async def add_deal(self, *, contact_id: int, comment: str,
+                       source_key: str = "") -> int:
+        title = self.deal_title
+        if source_key:
+            title = f"{title} — {plain(source_key)}"
         fields = {
-            "TITLE": self.deal_title,
+            "TITLE": title,
             "CONTACT_ID": contact_id,
             "SOURCE_ID": self.source_id,
-            "SOURCE_DESCRIPTION": "Telegram",
+            "SOURCE_DESCRIPTION": plain(f"Telegram / {source_key}") if source_key
+                                  else "Telegram",
             "OPENED": "Y",
             "COMMENTS": comment,
         }
         return int(await self._call("crm.deal.add", {"fields": fields}))
 
     async def send_lead(self, *, full_name: str, username: str | None, tg_id: int,
-                        phone: str, answers: dict[str, str], points: int) -> tuple[int, int]:
+                        phone: str, answers: dict[str, str], points: int,
+                        source_key: str = "") -> tuple[int, int]:
         comment = build_comment(
             full_name=full_name, username=username, tg_id=tg_id,
-            phone=phone, answers=answers, points=points,
+            phone=phone, answers=answers, points=points, source_key=source_key,
         )
         contact_id = await self.add_contact(
             full_name=full_name, phone=phone, username=username
         )
-        deal_id = await self.add_deal(contact_id=contact_id, comment=comment)
+        deal_id = await self.add_deal(
+            contact_id=contact_id, comment=comment, source_key=source_key
+        )
         log.info("Битрикс: контакт %s, сделка %s", contact_id, deal_id)
         return contact_id, deal_id
 
@@ -105,9 +113,16 @@ def plain(text: str) -> str:
 
 
 def build_comment(*, full_name: str, username: str | None, tg_id: int,
-                  phone: str, answers: dict[str, str], points: int) -> str:
-    """Всё, что собрал бот — в комментарий сделки."""
-    lines = ["Заявка из Telegram-бота", ""]
+                  phone: str, answers: dict[str, str], points: int,
+                  source_key: str = "") -> str:
+    """Всё, что собрал бот — в комментарий сделки.
+
+    Ключевое слово из ссылки запуска (t.me/bot?start=КЛЮЧ) идёт
+    первой строкой — заголовком комментария.
+    """
+    header = f"Заявка из Telegram-бота: {source_key}" if source_key \
+        else "Заявка из Telegram-бота"
+    lines = [header, ""]
     for step in STEPS:
         if step.key in answers:
             lines.append(f"{step.title}: {label(step.key, answers[step.key])}")
