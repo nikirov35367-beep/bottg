@@ -16,7 +16,7 @@ router = Router(name="admin")
 
 HEADERS = [
     "id", "created_at", "Имя", "Username", "TG ID", "Цель",
-    "Бюджет", "Срок", "Локация", "Телефон", "Баллы",
+    "Бюджет", "Срок", "Локация", "Телефон", "Баллы", "Метка",
 ]
 FIELD_KEYS = {5: "purpose", 6: "budget", 7: "timing", 8: "region"}
 
